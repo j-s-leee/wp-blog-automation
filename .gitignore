@@ -1,0 +1,23 @@
+# Environment files
+.env
+*.env.local
+
+# Docker volumes
+n8n_data/
+mysql_data/
+wp_data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak

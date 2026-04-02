@@ -1,0 +1,251 @@
+{
+  "name": "블로그 글감 자동 생성",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 5
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $env.GOOGLE_SHEET_URL }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "rangeDefinition": "detectAutomatically"
+          }
+        },
+        "triggerColumn": "상태",
+        "triggerValue": "대기"
+      },
+      "id": "trigger-google-sheets",
+      "name": "Google Sheets 트리거",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json['프롬프트'] || `다음 키워드에 대해 SEO 최적화된 한국어 블로그 글을 작성해주세요.\\n\\n키워드: ${$json['키워드']}\\n\\n요구사항:\\n- 제목은 클릭을 유도하는 매력적인 형태로\\n- 본문은 2000자 이상\\n- H2, H3 소제목 활용\\n- 핵심 키워드를 자연스럽게 반복 (키워드 밀도 1-2%)\\n- 서론, 본론, 결론 구조\\n- 독자에게 말하듯 친근한 톤\\n\\n출력 형식:\\n제목: [제목]\\n---\\n[본문 HTML]` }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } }) }}"
+      },
+      "id": "gemini-api-call",
+      "name": "Gemini API 호출",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gemini 응답에서 제목과 본문 분리\nconst response = $input.first().json;\nconst text = response.candidates[0].content.parts[0].text;\n\n// 제목과 본문 분리\nconst lines = text.split('\\n');\nlet title = '';\nlet content = '';\nlet foundSeparator = false;\n\nfor (const line of lines) {\n  if (line.startsWith('제목:') || line.startsWith('제목 :')) {\n    title = line.replace(/^제목\\s*:\\s*/, '').trim();\n  } else if (line.trim() === '---') {\n    foundSeparator = true;\n  } else if (foundSeparator || (title && !line.startsWith('제목'))) {\n    content += line + '\\n';\n  }\n}\n\n// 제목을 못 찾은 경우 첫 줄을 제목으로\nif (!title && lines.length > 0) {\n  title = lines[0].replace(/^#+ /, '').trim();\n  content = lines.slice(1).join('\\n').trim();\n}\n\nreturn [{\n  json: {\n    title: title,\n    content: content.trim(),\n    keyword: $('Google Sheets 트리거').first().json['키워드'],\n    row_number: $('Google Sheets 트리거').first().json['row_number']\n  }\n}];"
+      },
+      "id": "parse-response",
+      "name": "응답 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auto-post-check",
+              "leftValue": "={{ $('Google Sheets 트리거').first().json['자동포스팅'] }}",
+              "rightValue": "Y",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-auto-post",
+      "name": "자동 포스팅 여부 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.WP_HOST }}/wp-json/wp/v2/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $json.title, content: $json.content, status: 'draft', categories: [], tags: [] }) }}"
+      },
+      "id": "wordpress-post",
+      "name": "WordPress 포스팅",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $env.GOOGLE_SHEET_URL }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "상태": "완료",
+            "생성된 제목": "={{ $('응답 파싱').first().json.title }}",
+            "포스팅 여부": "={{ $('자동 포스팅 여부 확인').first().json ? 'Y' : 'N' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet-posted",
+      "name": "시트 업데이트 (포스팅 완료)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $env.GOOGLE_SHEET_URL }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "상태": "글 생성 완료",
+            "생성된 제목": "={{ $('응답 파싱').first().json.title }}",
+            "생성된 본문": "={{ $('응답 파싱').first().json.content }}",
+            "포스팅 여부": "N"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet-content-only",
+      "name": "시트 업데이트 (글만 생성)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 450]
+    }
+  ],
+  "connections": {
+    "Google Sheets 트리거": {
+      "main": [
+        [
+          {
+            "node": "Gemini API 호출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini API 호출": {
+      "main": [
+        [
+          {
+            "node": "응답 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "응답 파싱": {
+      "main": [
+        [
+          {
+            "node": "자동 포스팅 여부 확인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "자동 포스팅 여부 확인": {
+      "main": [
+        [
+          {
+            "node": "WordPress 포스팅",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "시트 업데이트 (글만 생성)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WordPress 포스팅": {
+      "main": [
+        [
+          {
+            "node": "시트 업데이트 (포스팅 완료)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul"
+  },
+  "tags": [
+    {
+      "name": "모듈1-글감생성"
+    }
+  ]
+}
