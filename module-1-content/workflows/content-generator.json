@@ -1,5 +1,5 @@
 {
-  "name": "블로그 글감 자동 생성",
+  "name": "블로그 글감 자동 생성 (이미지 포함)",
   "nodes": [
     {
       "parameters": {
@@ -50,7 +50,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json['프롬프트'] || `다음 키워드에 대해 SEO 최적화된 한국어 블로그 글을 작성해주세요.\\n\\n키워드: ${$json['키워드']}\\n\\n요구사항:\\n- 제목은 클릭을 유도하는 매력적인 형태로\\n- 본문은 2000자 이상\\n- H2, H3 소제목 활용\\n- 핵심 키워드를 자연스럽게 반복 (키워드 밀도 1-2%)\\n- 서론, 본론, 결론 구조\\n- 독자에게 말하듯 친근한 톤\\n\\n출력 형식:\\n제목: [제목]\\n---\\n[본문 HTML]` }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } }) }}"
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json['프롬프트'] || `다음 키워드에 대해 SEO 최적화된 한국어 블로그 글을 작성해주세요.\\n\\n키워드: ${$json['키워드']}\\n\\n요구사항:\\n- 제목은 클릭을 유도하는 매력적인 형태로\\n- 본문은 2000자 이상\\n- H2, H3 소제목 활용\\n- 핵심 키워드를 자연스럽게 반복 (키워드 밀도 1-2%)\\n- 서론, 본론, 결론 구조\\n- 독자에게 말하듯 친근한 톤\\n- 본문에 [IMAGE_1], [IMAGE_2] 플레이스홀더를 적절한 위치에 2개 삽입\\n\\n출력 형식:\\n제목: [제목]\\n---\\n[본문 HTML]` }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4096 } }) }}"
       },
       "id": "gemini-api-call",
       "name": "Gemini API 호출",
@@ -60,13 +60,126 @@
     },
     {
       "parameters": {
-        "jsCode": "// Gemini 응답에서 제목과 본문 분리\nconst response = $input.first().json;\nconst text = response.candidates[0].content.parts[0].text;\n\n// 제목과 본문 분리\nconst lines = text.split('\\n');\nlet title = '';\nlet content = '';\nlet foundSeparator = false;\n\nfor (const line of lines) {\n  if (line.startsWith('제목:') || line.startsWith('제목 :')) {\n    title = line.replace(/^제목\\s*:\\s*/, '').trim();\n  } else if (line.trim() === '---') {\n    foundSeparator = true;\n  } else if (foundSeparator || (title && !line.startsWith('제목'))) {\n    content += line + '\\n';\n  }\n}\n\n// 제목을 못 찾은 경우 첫 줄을 제목으로\nif (!title && lines.length > 0) {\n  title = lines[0].replace(/^#+ /, '').trim();\n  content = lines.slice(1).join('\\n').trim();\n}\n\nreturn [{\n  json: {\n    title: title,\n    content: content.trim(),\n    keyword: $('Google Sheets 트리거').first().json['키워드'],\n    row_number: $('Google Sheets 트리거').first().json['row_number']\n  }\n}];"
+        "jsCode": "// Gemini 응답에서 제목과 본문 분리\nconst response = $input.first().json;\nconst text = response.candidates[0].content.parts[0].text;\n\nconst lines = text.split('\\n');\nlet title = '';\nlet content = '';\nlet foundSeparator = false;\n\nfor (const line of lines) {\n  if (line.startsWith('제목:') || line.startsWith('제목 :')) {\n    title = line.replace(/^제목\\s*:\\s*/, '').trim();\n  } else if (line.trim() === '---') {\n    foundSeparator = true;\n  } else if (foundSeparator || (title && !line.startsWith('제목'))) {\n    content += line + '\\n';\n  }\n}\n\nif (!title && lines.length > 0) {\n  title = lines[0].replace(/^#+ /, '').trim();\n  content = lines.slice(1).join('\\n').trim();\n}\n\n// 이미지 생성 여부 확인\nconst imageGeneration = $('Google Sheets 트리거').first().json['이미지생성'] || '없음';\nconst imageStyle = $('Google Sheets 트리거').first().json['이미지스타일'] || '일러스트';\n\nreturn [{\n  json: {\n    title: title,\n    content: content.trim(),\n    keyword: $('Google Sheets 트리거').first().json['키워드'],\n    row_number: $('Google Sheets 트리거').first().json['row_number'],\n    imageGeneration: imageGeneration,\n    imageStyle: imageStyle\n  }\n}];"
       },
       "id": "parse-response",
       "name": "응답 파싱",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "image-gen-check",
+              "leftValue": "={{ $json.imageGeneration }}",
+              "rightValue": "없음",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-image-generation",
+      "name": "이미지 생성 여부 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 이미지 스타일 매핑\nconst styleMap = {\n  '일러스트': 'flat illustration style, clean lines, modern design, vibrant colors, digital art',\n  '사진풍': 'professional photography style, high quality, realistic, well-lit, sharp focus',\n  '미니멀': 'minimal design, simple shapes, white background, clean aesthetic, modern'\n};\n\nconst keyword = $json.keyword;\nconst style = styleMap[$json.imageStyle] || styleMap['일러스트'];\n\n// 썸네일 + 본문 이미지 2장 = 총 3장의 프롬프트 생성\nconst prompts = [\n  {\n    type: 'thumbnail',\n    prompt: `${keyword}, blog thumbnail, eye-catching, ${style}, 16:9 aspect ratio`\n  },\n  {\n    type: 'body_1',\n    prompt: `${keyword}, informative blog illustration, ${style}, detailed`\n  },\n  {\n    type: 'body_2', \n    prompt: `${keyword}, blog supporting image, ${style}, complementary visual`\n  }\n];\n\nreturn prompts.map(p => ({ json: { ...p, keyword, title: $json.title, content: $json.content, row_number: $json.row_number } }));"
+      },
+      "id": "prepare-image-prompts",
+      "name": "이미지 프롬프트 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ instances: [{ prompt: $json.prompt }], parameters: { sampleCount: 1, aspectRatio: $json.type === 'thumbnail' ? '16:9' : '4:3' } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 15000
+            }
+          }
+        }
+      },
+      "id": "imagen-api-call",
+      "name": "Imagen API 호출",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.WP_HOST }}/wp-json/wp/v2/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $json.type }}-{{ Date.now() }}.png\""
+            },
+            {
+              "name": "Content-Type",
+              "value": "image/png"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "body": "={{ Buffer.from($json.predictions[0].bytesBase64Encoded, 'base64') }}"
+      },
+      "id": "wp-upload-image",
+      "name": "WordPress 이미지 업로드",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 업로드된 이미지 정보 수집\nconst items = $input.all();\nlet thumbnailId = null;\nlet thumbnailUrl = '';\nconst bodyImages = [];\n\nfor (const item of items) {\n  const imageUrl = item.json.source_url || item.json.guid?.rendered || '';\n  const imageId = item.json.id;\n  const type = item.json.type || 'body';\n  \n  if (type === 'thumbnail' || items.indexOf(item) === 0) {\n    thumbnailId = imageId;\n    thumbnailUrl = imageUrl;\n  } else {\n    bodyImages.push(imageUrl);\n  }\n}\n\n// 본문에 이미지 삽입\nlet content = $('응답 파싱').first().json.content;\n\n// [IMAGE_1], [IMAGE_2] 플레이스홀더를 실제 이미지로 교체\nif (bodyImages[0]) {\n  content = content.replace('[IMAGE_1]', `<figure><img src=\"${bodyImages[0]}\" alt=\"${$('응답 파싱').first().json.keyword}\" style=\"width:100%;height:auto;\"/></figure>`);\n}\nif (bodyImages[1]) {\n  content = content.replace('[IMAGE_2]', `<figure><img src=\"${bodyImages[1]}\" alt=\"${$('응답 파싱').first().json.keyword}\" style=\"width:100%;height:auto;\"/></figure>`);\n}\n\n// 플레이스홀더가 남아있으면 제거\ncontent = content.replace(/\\[IMAGE_\\d+\\]/g, '');\n\nreturn [{\n  json: {\n    title: $('응답 파싱').first().json.title,\n    content: content,\n    keyword: $('응답 파싱').first().json.keyword,\n    row_number: $('응답 파싱').first().json.row_number,\n    thumbnailId: thumbnailId,\n    thumbnailUrl: thumbnailUrl\n  }\n}];"
+      },
+      "id": "merge-images-content",
+      "name": "이미지 + 본문 병합",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 200]
     },
     {
       "parameters": {
@@ -93,7 +206,7 @@
       "name": "자동 포스팅 여부 확인",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1000, 300]
+      "position": [2250, 300]
     },
     {
       "parameters": {
@@ -103,13 +216,119 @@
         "genericAuthType": "httpBasicAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $json.title, content: $json.content, status: 'draft', categories: [], tags: [] }) }}"
+        "jsonBody": "={{ JSON.stringify({ title: $json.title, content: $json.content, status: 'draft', featured_media: $json.thumbnailId || 0, categories: [], tags: [] }) }}"
       },
       "id": "wordpress-post",
       "name": "WordPress 포스팅",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1250, 200],
+      "position": [2500, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "wp-auth",
+          "name": "WordPress Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $env.GOOGLE_SHEET_URL }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "상태": "완료",
+            "생성된 제목": "={{ $json.title }}",
+            "포스팅 여부": "Y"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet-posted",
+      "name": "시트 업데이트 (포스팅 완료)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2750, 200]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $env.GOOGLE_SHEET_URL }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "상태": "글 생성 완료",
+            "생성된 제목": "={{ $json.title }}",
+            "생성된 본문": "={{ $json.content }}",
+            "포스팅 여부": "N"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet-content-only",
+      "name": "시트 업데이트 (글만 생성)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2500, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auto-post-check-no-img",
+              "leftValue": "={{ $('Google Sheets 트리거').first().json['자동포스팅'] }}",
+              "rightValue": "Y",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-auto-post-no-image",
+      "name": "자동 포스팅 여부 확인 (이미지 없음)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.WP_HOST }}/wp-json/wp/v2/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $('응답 파싱').first().json.title, content: $('응답 파싱').first().json.content, status: 'draft', categories: [], tags: [] }) }}"
+      },
+      "id": "wordpress-post-no-image",
+      "name": "WordPress 포스팅 (이미지 없음)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 450],
       "credentials": {
         "httpBasicAuth": {
           "id": "wp-auth",
@@ -134,16 +353,16 @@
           "value": {
             "상태": "완료",
             "생성된 제목": "={{ $('응답 파싱').first().json.title }}",
-            "포스팅 여부": "={{ $('자동 포스팅 여부 확인').first().json ? 'Y' : 'N' }}"
+            "포스팅 여부": "Y"
           }
         },
         "options": {}
       },
-      "id": "update-sheet-posted",
-      "name": "시트 업데이트 (포스팅 완료)",
+      "id": "update-sheet-posted-no-image",
+      "name": "시트 업데이트 (포스팅 완료, 이미지 없음)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1500, 200]
+      "position": [1750, 450]
     },
     {
       "parameters": {
@@ -168,11 +387,11 @@
         },
         "options": {}
       },
-      "id": "update-sheet-content-only",
-      "name": "시트 업데이트 (글만 생성)",
+      "id": "update-sheet-content-only-no-image",
+      "name": "시트 업데이트 (글만 생성, 이미지 없음)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1250, 450]
+      "position": [1500, 650]
     }
   ],
   "connections": {
@@ -199,6 +418,68 @@
       ]
     },
     "응답 파싱": {
+      "main": [
+        [
+          {
+            "node": "이미지 생성 여부 확인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이미지 생성 여부 확인": {
+      "main": [
+        [
+          {
+            "node": "이미지 프롬프트 준비",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "자동 포스팅 여부 확인 (이미지 없음)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이미지 프롬프트 준비": {
+      "main": [
+        [
+          {
+            "node": "Imagen API 호출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Imagen API 호출": {
+      "main": [
+        [
+          {
+            "node": "WordPress 이미지 업로드",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WordPress 이미지 업로드": {
+      "main": [
+        [
+          {
+            "node": "이미지 + 본문 병합",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이미지 + 본문 병합": {
       "main": [
         [
           {
@@ -232,6 +513,35 @@
         [
           {
             "node": "시트 업데이트 (포스팅 완료)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "자동 포스팅 여부 확인 (이미지 없음)": {
+      "main": [
+        [
+          {
+            "node": "WordPress 포스팅 (이미지 없음)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "시트 업데이트 (글만 생성, 이미지 없음)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WordPress 포스팅 (이미지 없음)": {
+      "main": [
+        [
+          {
+            "node": "시트 업데이트 (포스팅 완료, 이미지 없음)",
             "type": "main",
             "index": 0
           }
