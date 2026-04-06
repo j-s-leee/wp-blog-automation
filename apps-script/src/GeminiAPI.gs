@@ -3,8 +3,8 @@
  * Handles all Gemini API communication for blog content and images
  */
 
-var GEMINI_TEXT_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-var IMAGEN_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict';
+var GEMINI_TEXT_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+var GEMINI_IMAGE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
 /**
  * Generates blog content via Gemini text API.
@@ -94,26 +94,35 @@ function parseGeneratedContent(text) {
 }
 
 /**
- * Generates a single image via Imagen API.
+ * Generates a single image via Gemini 2.5 Flash native image generation.
+ * Uses responseModalities: ["IMAGE"] to generate images directly from the text model.
  *
  * @param {string} prompt - Image generation prompt
  * @param {string} apiKey - Gemini API key
- * @param {string} aspectRatio - Aspect ratio string (default: "16:9")
+ * @param {string} aspectRatio - Aspect ratio hint (included in prompt, not a direct parameter)
  * @return {Object} Object with keys:
  *   - base64: Base64-encoded image data
  *   - mimeType: MIME type of the image (e.g., "image/png")
  */
 function generateImage(prompt, apiKey, aspectRatio) {
-  var url = IMAGEN_URL + '?key=' + apiKey;
+  var url = GEMINI_IMAGE_URL + '?key=' + apiKey;
+
+  var fullPrompt = prompt;
+  if (aspectRatio) {
+    fullPrompt += ', ' + aspectRatio + ' aspect ratio';
+  }
 
   var payload = {
-    instances: [
-      { prompt: prompt }
+    contents: [
+      {
+        parts: [
+          { text: 'Generate an image: ' + fullPrompt }
+        ]
+      }
     ],
-    parameters: {
-      sampleCount: 1,
-      aspectRatio: aspectRatio || '16:9',
-      outputMimeType: 'image/png'
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+      responseMimeType: 'image/png'
     }
   };
 
@@ -127,19 +136,26 @@ function generateImage(prompt, apiKey, aspectRatio) {
   var response = UrlFetchApp.fetch(url, options);
   var statusCode = response.getResponseCode();
 
-  if (statusCode !== 200 && statusCode !== 201) {
+  if (statusCode !== 200) {
     throw new Error(
-      'Imagen API error: HTTP ' + statusCode + ' - ' + response.getContentText()
+      'Gemini image API error: HTTP ' + statusCode + ' - ' + response.getContentText()
     );
   }
 
   var json = JSON.parse(response.getContentText());
-  var prediction = json.predictions[0];
+  var parts = json.candidates[0].content.parts;
 
-  return {
-    base64: prediction.bytesBase64Encoded,
-    mimeType: prediction.mimeType || 'image/png'
-  };
+  // Find the image part in the response
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].inlineData) {
+      return {
+        base64: parts[i].inlineData.data,
+        mimeType: parts[i].inlineData.mimeType || 'image/png'
+      };
+    }
+  }
+
+  throw new Error('Gemini 응답에 이미지가 포함되지 않았습니다.');
 }
 
 /**
