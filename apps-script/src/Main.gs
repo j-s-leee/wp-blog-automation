@@ -70,19 +70,10 @@ function processRow(row, config) {
     var title   = generated.title;
     var content = generated.content;
 
-    // --- 2. Optionally generate images ---
+    // --- 2. 이미지 생성 (현재 무료 티어 미지원 — 추후 지원 예정) ---
     var imageSet = null;
     if (needsImages) {
-      var style = row.imageStyle || '일러스트';
-      var rawImageSet = generateImageSet(row.keyword, style, config.geminiApiKey);
-
-      // Normalize property names: generateImageSet returns .base64, but
-      // publishToWordPress expects .base64Data
-      imageSet = {
-        thumbnail: rawImageSet.thumbnail ? { base64Data: rawImageSet.thumbnail.base64, mimeType: rawImageSet.thumbnail.mimeType } : null,
-        body1:     rawImageSet.body1     ? { base64Data: rawImageSet.body1.base64,     mimeType: rawImageSet.body1.mimeType     } : null,
-        body2:     rawImageSet.body2     ? { base64Data: rawImageSet.body2.base64,     mimeType: rawImageSet.body2.mimeType     } : null
-      };
+      Logger.log('⚠️ 이미지 생성은 현재 Gemini 무료 티어에서 지원되지 않아 건너뜁니다.');
     }
 
     // --- 3. Publish or embed images ---
@@ -93,18 +84,6 @@ function processRow(row, config) {
         postingResult = publishToWordPress(title, content, imageSet, row.keyword, config);
       } else {
         postingResult = '⚠️ WordPress 설정이 없어 포스팅을 건너뜀. "설정" 시트에서 WordPress 정보를 입력해 주세요.';
-      }
-    } else if (needsImages && imageSet) {
-      // No posting requested — embed images as base64 data URIs directly in content
-      var dataUris = [];
-      if (imageSet.body1) {
-        dataUris.push('data:' + imageSet.body1.mimeType + ';base64,' + imageSet.body1.base64Data);
-      }
-      if (imageSet.body2) {
-        dataUris.push('data:' + imageSet.body2.mimeType + ';base64,' + imageSet.body2.base64Data);
-      }
-      if (dataUris.length > 0) {
-        content = insertImagesIntoContent(content, dataUris, row.keyword);
       }
     }
 
