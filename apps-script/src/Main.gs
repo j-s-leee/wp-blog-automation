@@ -70,18 +70,23 @@ function processRow(row, config) {
     var title   = generated.title;
     var content = generated.content;
 
-    // --- 2. 이미지 생성 (현재 무료 티어 미지원 — 추후 지원 예정) ---
-    var imageSet = null;
-    if (needsImages) {
-      Logger.log('⚠️ 이미지 생성은 현재 Gemini 무료 티어에서 지원되지 않아 건너뜁니다.');
+    // --- 2. 이미지 검색 (Pexels 무료 스톡 이미지) ---
+    var imageResult = null;
+    if (needsImages && hasPexelsKey()) {
+      imageResult = searchImageSet(row.keyword, config.pexelsApiKey);
+      if (imageResult.bodyImageUrls.length > 0) {
+        content = insertImagesIntoContent(content, imageResult.bodyImageUrls, row.keyword);
+      }
+    } else if (needsImages && !hasPexelsKey()) {
+      Logger.log('⚠️ Pexels API 키가 없어 이미지 삽입을 건너뜁니다.');
     }
 
-    // --- 3. Publish or embed images ---
+    // --- 3. Publish ---
     var postingResult = '';
 
     if (needsPosting) {
       if (hasWordPressConfig()) {
-        postingResult = publishToWordPress(title, content, imageSet, row.keyword, config);
+        postingResult = publishToWordPress(title, content, null, row.keyword, config);
       } else {
         postingResult = '⚠️ WordPress 설정이 없어 포스팅을 건너뜀. "설정" 시트에서 WordPress 정보를 입력해 주세요.';
       }
@@ -140,13 +145,15 @@ function disableAutoTrigger() {
  * of the Gemini API key and WordPress settings.
  */
 function checkSettings() {
-  var geminiOk = hasGeminiKey();
-  var wpOk     = hasWordPressConfig();
+  var geminiOk  = hasGeminiKey();
+  var pexelsOk  = hasPexelsKey();
+  var wpOk      = hasWordPressConfig();
 
   var message =
     '=== 설정 상태 ===\n\n' +
     'Gemini API 키: ' + (geminiOk ? '✅ 설정됨' : '❌ 미설정') + '\n' +
-    'WordPress 연동: ' + (wpOk ? '✅ 설정됨' : '❌ 미설정 (자동 포스팅 불가)');
+    'Pexels API 키: ' + (pexelsOk ? '✅ 설정됨' : 'ℹ️ 미설정 (이미지 자동 삽입 불가)') + '\n' +
+    'WordPress 연동: ' + (wpOk ? '✅ 설정됨' : 'ℹ️ 미설정 (자동 포스팅 불가)');
 
   SpreadsheetApp.getUi().alert(message);
 }

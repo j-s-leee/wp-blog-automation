@@ -15,12 +15,14 @@ var PROMPT_SHEET_NAME = '프롬프트 설정';
  * Row 2: WordPress 주소 | <url>
  * Row 3: WordPress 아이디 | <username>
  * Row 4: WordPress App Password | <password>
+ * Row 5: Pexels API 키 | <pexels_api_key>
  *
  * @return {Object} Configuration object with keys:
  *   - geminiApiKey: Gemini API key
  *   - wpUrl: WordPress URL
  *   - wpUser: WordPress username
  *   - wpAppPassword: WordPress app password
+ *   - pexelsApiKey: Pexels API key
  */
 function getConfig() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -30,15 +32,16 @@ function getConfig() {
     throw new Error('설정 sheet not found');
   }
 
-  // Get the range with all settings (A:B, rows 1-4)
-  var data = sheet.getRange('A1:B4').getValues();
+  // Get the range with all settings (A:B, rows 1-5)
+  var data = sheet.getRange('A1:B5').getValues();
 
   // Parse the settings from rows
   var config = {
     geminiApiKey: data[0][1] || '',        // Row 1, Column B
     wpUrl: data[1][1] || '',               // Row 2, Column B
     wpUser: data[2][1] || '',              // Row 3, Column B
-    wpAppPassword: data[3][1] || ''        // Row 4, Column B
+    wpAppPassword: data[3][1] || '',       // Row 4, Column B
+    pexelsApiKey: data[4][1] || ''         // Row 5, Column B
   };
 
   return config;
@@ -52,6 +55,15 @@ function getConfig() {
 function hasGeminiKey() {
   var config = getConfig();
   return !!config.geminiApiKey && config.geminiApiKey.trim().length > 0;
+}
+
+/**
+ * Checks if Pexels API key is configured.
+ * @return {boolean}
+ */
+function hasPexelsKey() {
+  var config = getConfig();
+  return !!config.pexelsApiKey && config.pexelsApiKey.trim().length > 0;
 }
 
 /**
