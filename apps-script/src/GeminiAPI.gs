@@ -121,8 +121,7 @@ function generateImage(prompt, apiKey, aspectRatio) {
       }
     ],
     generationConfig: {
-      responseModalities: ['IMAGE'],
-      responseMimeType: 'image/png'
+      responseModalities: ['IMAGE']
     }
   };
 
