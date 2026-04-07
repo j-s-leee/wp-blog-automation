@@ -81,7 +81,22 @@ function processRow(row, config) {
       Logger.log('⚠️ Pexels API 키가 없어 이미지 삽입을 건너뜁니다.');
     }
 
-    // --- 3. Publish ---
+    // --- 3. 쿠팡 파트너스 상품 삽입 ---
+    if (hasCoupangConfig()) {
+      try {
+        var coupangProducts = searchCoupangProducts(row.keyword, config);
+        if (coupangProducts.length > 0) {
+          content = insertCoupangContent(content, coupangProducts, config.coupangBannerCode);
+          Logger.log('쿠팡 상품 ' + coupangProducts.length + '개 삽입 완료');
+        } else {
+          Logger.log('쿠팡 검색 결과 없음 — 쿠팡 없이 진행');
+        }
+      } catch (e) {
+        Logger.log('⚠️ 쿠팡 모듈 오류 (글 생성은 계속): ' + e.message);
+      }
+    }
+
+    // --- 4. Publish ---
     var postingResult = '';
 
     if (needsPosting) {
@@ -148,12 +163,14 @@ function checkSettings() {
   var geminiOk  = hasGeminiKey();
   var pexelsOk  = hasPexelsKey();
   var wpOk      = hasWordPressConfig();
+  var coupangOk = hasCoupangConfig();
 
   var message =
     '=== 설정 상태 ===\n\n' +
     'Gemini API 키: ' + (geminiOk ? '✅ 설정됨' : '❌ 미설정') + '\n' +
     'Pexels API 키: ' + (pexelsOk ? '✅ 설정됨' : 'ℹ️ 미설정 (이미지 자동 삽입 불가)') + '\n' +
-    'WordPress 연동: ' + (wpOk ? '✅ 설정됨' : 'ℹ️ 미설정 (자동 포스팅 불가)');
+    'WordPress 연동: ' + (wpOk ? '✅ 설정됨' : 'ℹ️ 미설정 (자동 포스팅 불가)') + '\n' +
+    '쿠팡 파트너스: ' + (coupangOk ? '✅ 설정됨' : 'ℹ️ 미설정 (상품 추천 불가)');
 
   SpreadsheetApp.getUi().alert(message);
 }

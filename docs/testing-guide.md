@@ -260,6 +260,27 @@ Base64 데이터 길이: 245632
 
 ---
 
+## PART 5-B: 쿠팡 파트너스 모듈 테스트
+
+### 쿠팡 파트너스 모듈 테스트
+
+| 함수명 | 설명 | API 호출 |
+|--------|------|---------|
+| `testCoupangHmac` | HMAC 서명 형식 검증 | X |
+| `testCoupangSearch` | 실제 상품 검색 테스트 | O (1회) |
+| `testCoupangBanner` | HTML 생성 로직 검증 | X |
+| `testCoupangIntegration` | 검색→HTML→삽입 E2E | O (1회) |
+
+**테스트 순서 권장:**
+1. `testCoupangHmac` — API 키 없이도 실행 가능
+2. `testCoupangBanner` — API 키 없이도 실행 가능
+3. `testCoupangSearch` — API 키 필요, 시간당 호출 제한 주의
+4. `testCoupangIntegration` — API 키 필요, 전체 흐름 확인
+
+⚠️ `testCoupangSearch`와 `testCoupangIntegration`은 각각 실제 API를 1회 호출합니다. 시간당 10회 제한에 주의하세요.
+
+---
+
 ## PART 6: WordPress 연동 테스트 (선택)
 
 WordPress 테스트 블로그 세팅이 완료된 경우에만 진행합니다.

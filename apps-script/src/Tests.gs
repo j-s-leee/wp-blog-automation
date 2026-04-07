@@ -253,3 +253,170 @@ function maskApiKey(apiKey) {
   }
   return apiKey.substring(0, 8) + '****';
 }
+
+// ==========================================
+// 쿠팡 파트너스 모듈 테스트
+// ==========================================
+
+/**
+ * HMAC 서명 생성 테스트.
+ * Script Editor에서 실행 → View > Logs로 결과 확인.
+ */
+function testCoupangHmac() {
+  Logger.log('=== 쿠팡 HMAC 서명 생성 테스트 ===');
+
+  var testPath = '/v2/providers/affiliate_open_api/apis/openapi/products/search';
+  var testQuery = 'keyword=test&limit=5';
+  var testSecret = 'test-secret-key';
+  var testAccess = 'test-access-key';
+
+  var authHeader = generateCoupangHmac('GET', testPath, testQuery, testSecret, testAccess);
+
+  Logger.log('생성된 인증 헤더:');
+  Logger.log(authHeader);
+
+  var hasAlgorithm = authHeader.indexOf('CEA algorithm=HmacSHA256') === 0;
+  var hasAccessKey = authHeader.indexOf('access-key=test-access-key') !== -1;
+  var hasSignedDate = authHeader.indexOf('signed-date=') !== -1;
+  var hasSignature = authHeader.indexOf('signature=') !== -1;
+
+  Logger.log('형식 검증:');
+  Logger.log('  CEA algorithm 포함: ' + (hasAlgorithm ? '✅' : '❌'));
+  Logger.log('  access-key 포함: ' + (hasAccessKey ? '✅' : '❌'));
+  Logger.log('  signed-date 포함: ' + (hasSignedDate ? '✅' : '❌'));
+  Logger.log('  signature 포함: ' + (hasSignature ? '✅' : '❌'));
+
+  if (hasAlgorithm && hasAccessKey && hasSignedDate && hasSignature) {
+    Logger.log('✅ HMAC 서명 생성 테스트 통과');
+  } else {
+    Logger.log('❌ HMAC 서명 생성 테스트 실패');
+  }
+}
+
+/**
+ * 쿠팡 상품 검색 API 테스트.
+ * ⚠️ 실제 API를 호출하므로 시간당 10회 제한에 주의.
+ */
+function testCoupangSearch() {
+  Logger.log('=== 쿠팡 상품 검색 API 테스트 ===');
+
+  if (!hasCoupangConfig()) {
+    Logger.log('❌ 쿠팡 API 키가 설정되지 않았습니다. "설정" 시트에서 입력해 주세요.');
+    return;
+  }
+
+  var config = getConfig();
+  var keyword = '노트북';
+
+  Logger.log('검색 키워드: ' + keyword);
+
+  var products = searchCoupangProducts(keyword, config);
+
+  Logger.log('검색 결과: ' + products.length + '개 상품');
+
+  for (var i = 0; i < products.length; i++) {
+    var p = products[i];
+    Logger.log('  [' + (i + 1) + '] ' + p.productName);
+    Logger.log('      가격: ' + formatCoupangPrice(p.productPrice) + '원');
+    Logger.log('      로켓배송: ' + (p.isRocket ? 'Y' : 'N'));
+    Logger.log('      이미지: ' + p.productImage.substring(0, 50) + '...');
+    Logger.log('      링크: ' + p.productUrl.substring(0, 50) + '...');
+  }
+
+  if (products.length > 0) {
+    Logger.log('✅ 쿠팡 상품 검색 테스트 통과');
+  } else {
+    Logger.log('⚠️ 검색 결과 없음 — API 키 또는 네트워크 확인 필요');
+  }
+}
+
+/**
+ * 쿠팡 HTML 생성 테스트 (API 호출 없이 로컬 테스트).
+ */
+function testCoupangBanner() {
+  Logger.log('=== 쿠팡 HTML 생성 테스트 ===');
+
+  var testProducts = [
+    { productName: '삼성 갤럭시 노트북', productPrice: 1290000, productImage: 'https://example.com/img1.jpg', productUrl: 'https://link.coupang.com/test1', isRocket: true },
+    { productName: 'LG 그램 17인치', productPrice: 1590000, productImage: 'https://example.com/img2.jpg', productUrl: 'https://link.coupang.com/test2', isRocket: true },
+    { productName: '레노버 씽크패드', productPrice: 890000, productImage: 'https://example.com/img3.jpg', productUrl: 'https://link.coupang.com/test3', isRocket: false }
+  ];
+
+  var formatted = formatCoupangPrice(1290000);
+  Logger.log('가격 포맷팅: 1290000 → ' + formatted + ' (' + (formatted === '1,290,000' ? '✅' : '❌') + ')');
+
+  var testContent = '<p>첫 번째 문단입니다.</p><p>두 번째 문단입니다.</p><p>세 번째 문단입니다.</p><p>네 번째 문단입니다.</p>';
+  var withLinks = insertCoupangTextLinks(testContent, testProducts);
+  var hasTextLink = withLinks.indexOf('link.coupang.com') !== -1;
+  Logger.log('텍스트 링크 삽입: ' + (hasTextLink ? '✅' : '❌'));
+
+  var cards = buildProductCards(testProducts);
+  var hasCards = cards.indexOf('추천 상품') !== -1 && cards.indexOf('삼성 갤럭시') !== -1;
+  Logger.log('상품 카드 생성: ' + (hasCards ? '✅' : '❌'));
+
+  var banner = buildDynamicBanner('<script>test</script>');
+  var hasBanner = banner.indexOf('<script>test</script>') !== -1;
+  Logger.log('다이나믹 배너: ' + (hasBanner ? '✅' : '❌'));
+
+  var emptyBanner = buildDynamicBanner('');
+  Logger.log('빈 배너 코드 → 빈 문자열: ' + (emptyBanner === '' ? '✅' : '❌'));
+
+  var finalContent = insertCoupangContent(testContent, testProducts, '<script>banner</script>');
+  var hasAll = finalContent.indexOf('link.coupang.com') !== -1 &&
+               finalContent.indexOf('추천 상품') !== -1 &&
+               finalContent.indexOf('쿠팡 파트너스 활동') !== -1 &&
+               finalContent.indexOf('<script>banner</script>') !== -1;
+  Logger.log('통합 함수: ' + (hasAll ? '✅' : '❌'));
+
+  var noProducts = insertCoupangContent(testContent, [], '');
+  Logger.log('빈 상품 배열 → 원본 유지: ' + (noProducts === testContent ? '✅' : '❌'));
+
+  Logger.log('=== 쿠팡 HTML 생성 테스트 완료 ===');
+}
+
+/**
+ * 쿠팡 파트너스 전체 통합 테스트.
+ * ⚠️ 실제 API를 호출하므로 시간당 10회 제한에 주의.
+ */
+function testCoupangIntegration() {
+  Logger.log('=== 쿠팡 파트너스 통합 테스트 ===');
+
+  if (!hasCoupangConfig()) {
+    Logger.log('❌ 쿠팡 API 키가 설정되지 않았습니다.');
+    return;
+  }
+
+  var config = getConfig();
+  var keyword = '무선 이어폰';
+
+  Logger.log('1) 상품 검색: "' + keyword + '"');
+  var products = searchCoupangProducts(keyword, config);
+  Logger.log('   결과: ' + products.length + '개');
+
+  if (products.length === 0) {
+    Logger.log('⚠️ 검색 결과 없음 — 통합 테스트 중단');
+    return;
+  }
+
+  var testContent = '<h1>무선 이어폰 추천</h1><p>요즘 무선 이어폰이 대세입니다.</p><p>다양한 제품을 비교해보겠습니다.</p><p>음질, 배터리, 착용감이 중요합니다.</p><p>가성비도 놓칠 수 없죠.</p>';
+
+  Logger.log('2) HTML 삽입 테스트');
+  var finalContent = insertCoupangContent(testContent, products, config.coupangBannerCode);
+
+  var hasTextLinks = finalContent.indexOf('link.coupang.com') !== -1 || finalContent.indexOf('coupa.ng') !== -1;
+  var hasProductCards = finalContent.indexOf('추천 상품') !== -1;
+  var hasDisclosure = finalContent.indexOf('쿠팡 파트너스 활동') !== -1;
+
+  Logger.log('   텍스트 링크: ' + (hasTextLinks ? '✅' : '❌'));
+  Logger.log('   상품 카드: ' + (hasProductCards ? '✅' : '❌'));
+  Logger.log('   파트너스 문구: ' + (hasDisclosure ? '✅' : '❌'));
+
+  Logger.log('3) HTML 미리보기:');
+  Logger.log(finalContent.substring(0, 500) + '...');
+
+  if (hasTextLinks && hasProductCards && hasDisclosure) {
+    Logger.log('✅ 쿠팡 파트너스 통합 테스트 통과');
+  } else {
+    Logger.log('❌ 쿠팡 파트너스 통합 테스트 실패');
+  }
+}
