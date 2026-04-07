@@ -39,7 +39,7 @@ function insertCoupangTextLinks(content, products) {
   var count = Math.min(products.length, 2);
   for (var i = 0; i < count; i++) {
     var p = products[i];
-    var formattedPrice = formatCoupangPrice(p.price);
+    var formattedPrice = formatCoupangPrice(p.productPrice);
     var rocketBadge = p.isRocket
       ? ' <span style="background: #00a0e0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 11px;">🚀 로켓배송</span>'
       : '';
@@ -68,7 +68,7 @@ function buildProductCards(products) {
 
   for (var i = 0; i < items.length; i++) {
     var p = items[i];
-    var formattedPrice = formatCoupangPrice(p.price);
+    var formattedPrice = formatCoupangPrice(p.productPrice);
     var isLast = (i === items.length - 1);
     var borderStyle = isLast ? '' : 'border-bottom: 1px solid #e0e0e0;';
     var rocketBadge = p.isRocket
