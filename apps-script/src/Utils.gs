@@ -7,19 +7,19 @@
 function updateRowStatus(row, status, results) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONTENT_SHEET_NAME);
 
-  // Update status in column E
-  sheet.getRange(row, 5).setValue(status);
+  // Update status in column F (was E before 쿠팡 column added)
+  sheet.getRange(row, 6).setValue(status);
 
   // Update optional results
   if (results) {
     if (results.title) {
-      sheet.getRange(row, 6).setValue(results.title);
+      sheet.getRange(row, 7).setValue(results.title);
     }
     if (results.content) {
-      sheet.getRange(row, 7).setValue(results.content);
+      sheet.getRange(row, 8).setValue(results.content);
     }
     if (results.postingResult !== undefined) {
-      sheet.getRange(row, 8).setValue(results.postingResult);
+      sheet.getRange(row, 9).setValue(results.postingResult);
     }
   }
 
@@ -39,7 +39,7 @@ function getPendingRows() {
 
   // Start from row 2 (row 1 is header)
   for (var i = 1; i < data.length; i++) {
-    var statusCell = data[i][4]; // Column E (0-indexed: 4)
+    var statusCell = data[i][5]; // Column F (0-indexed: 5)
 
     if (statusCell === "대기") {
       pendingRows.push({
@@ -47,7 +47,8 @@ function getPendingRows() {
         keyword: data[i][0], // Column A
         imageGen: data[i][1], // Column B
         imageStyle: data[i][2], // Column C
-        autoPost: data[i][3] // Column D
+        autoPost: data[i][3], // Column D
+        coupang: data[i][4] // Column E
       });
     }
   }

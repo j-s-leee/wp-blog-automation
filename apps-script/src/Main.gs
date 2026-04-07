@@ -54,7 +54,7 @@ function runContentGeneration() {
  * Processes a single row: generates content, optionally generates images,
  * and optionally publishes to WordPress.
  *
- * @param {Object} row    - Row object from getPendingRows(): {row, keyword, imageGen, imageStyle, autoPost}
+ * @param {Object} row    - Row object from getPendingRows(): {row, keyword, imageGen, imageStyle, autoPost, coupang}
  * @param {Object} config - Config object from getConfig()
  */
 function processRow(row, config) {
@@ -92,7 +92,8 @@ function processRow(row, config) {
     }
 
     // --- 3. 쿠팡 파트너스 상품 삽입 ---
-    if (hasCoupangConfig()) {
+    var needsCoupang = (row.coupang === 'Y' || row.coupang === 'y');
+    if (needsCoupang && hasCoupangConfig()) {
       try {
         var coupangProducts = searchCoupangProducts(row.keyword, config);
         if (coupangProducts.length > 0) {
