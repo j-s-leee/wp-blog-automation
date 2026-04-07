@@ -70,7 +70,7 @@ function getPromptSettings() {
  * @param {boolean} includeImagePlaceholders - If true, adds instruction for [IMAGE_*] placeholders
  * @return {string} The complete prompt for Gemini API
  */
-function buildContentPrompt(keyword, includeImagePlaceholders) {
+function buildContentPrompt(keyword, includeImagePlaceholders, internalLinks) {
   var settings = getPromptSettings();
   var customPrompt = settings.customPrompt;
 
@@ -88,19 +88,31 @@ function buildContentPrompt(keyword, includeImagePlaceholders) {
   prompt += '글 길이: 약 ' + lengthNumber + '자\n';
   prompt += '톤: ' + toneDescription + '\n\n';
 
-  prompt += '요청 사항:\n';
-  prompt += '1. SEO 최적화: 주요 키워드를 자연스럽게 포함하되, 과도하게 반복하지 마세요.\n';
-  prompt += '2. 구조: H1, H2, H3 제목으로 계층적으로 구성하세요.\n';
-  prompt += '3. 읽기 쉽게: 단락은 2-3문장으로 짧게, 불릿 포인트 활용하세요.\n';
-  prompt += '4. 가치: 독자에게 실질적인 정보와 인사이트를 제공하세요.\n';
-  prompt += '5. HTML 형식: <h1>, <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em> 등 적절한 HTML 태그로 작성하세요.\n\n';
+  prompt += '=== SEO 필수 규칙 ===\n';
+  prompt += '1. 서두 키프레이즈: 첫 번째 문단(<p> 태그)에 반드시 키워드 "' + keyword + '"를 자연스럽게 포함하세요.\n';
+  prompt += '2. 소제목 키프레이즈: H2, H3 소제목 중 최소 절반 이상에 키워드 또는 동의어를 포함하세요.\n';
+  prompt += '3. SEO 제목: 제목은 30자 이내로 작성하세요. 키워드를 제목 앞부분에 배치하세요.\n';
+  prompt += '4. 메타 설명: 키워드를 포함한 120~150자 길이의 메타 설명을 작성하세요. 독자가 클릭하고 싶게 만드세요.\n';
+  prompt += '5. 구조: H2, H3 제목으로 계층적으로 구성하세요. (H1은 사용하지 마세요 — WordPress가 제목을 H1으로 처리합니다)\n';
+  prompt += '6. 읽기 쉽게: 단락은 2-3문장으로 짧게, 불릿 포인트 활용하세요.\n';
+  prompt += '7. 가치: 독자에게 실질적인 정보와 인사이트를 제공하세요.\n';
+  prompt += '8. HTML 형식: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em> 등 적절한 HTML 태그로 작성하세요.\n';
 
-  if (includeImagePlaceholders) {
-    prompt += '6. 이미지 플레이스홀더: 적절한 위치에 [IMAGE_1], [IMAGE_2] 등의 플레이스홀더를 삽입하세요.\n\n';
+  // 내부 링크
+  if (internalLinks && internalLinks.length > 0) {
+    prompt += '9. 내부 링크: 본문 중 자연스러운 위치에 아래 기존 글 링크를 1~2개 삽입하세요. <a href="URL">앵커 텍스트</a> 형태로.\n';
+    for (var i = 0; i < internalLinks.length; i++) {
+      prompt += '   - "' + internalLinks[i].title + '": ' + internalLinks[i].url + '\n';
+    }
   }
 
-  prompt += '출력 형식:\n';
-  prompt += '제목: [블로그 글 제목]\n';
+  if (includeImagePlaceholders) {
+    prompt += '10. 이미지 플레이스홀더: 적절한 위치에 [IMAGE_1], [IMAGE_2] 등의 플레이스홀더를 삽입하세요.\n';
+  }
+
+  prompt += '\n=== 출력 형식 (반드시 아래 형식을 따르세요) ===\n';
+  prompt += '제목: [30자 이내 SEO 제목]\n';
+  prompt += '메타설명: [120~150자, 키워드 포함 메타 설명]\n';
   prompt += '---\n';
   prompt += '[HTML 본문]\n\n';
 

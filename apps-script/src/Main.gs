@@ -65,9 +65,19 @@ function processRow(row, config) {
     var needsPosting = (row.autoPost  === 'Y' || row.autoPost  === 'y');
 
     // --- 1. Generate text content ---
-    var prompt = buildContentPrompt(row.keyword, needsImages);
+    var internalLinks = [];
+    if (hasWordPressConfig()) {
+      try {
+        internalLinks = searchExistingPosts(row.keyword, config);
+      } catch (e) {
+        Logger.log('내부 링크 검색 오류 (무시): ' + e.message);
+      }
+    }
+
+    var prompt = buildContentPrompt(row.keyword, needsImages, internalLinks);
     var generated = generateContent(prompt, config.geminiApiKey);
     var title   = generated.title;
+    var metaDescription = generated.metaDescription || '';
     var content = generated.content;
 
     // --- 2. 이미지 검색 (Pexels 무료 스톡 이미지) ---
@@ -101,7 +111,7 @@ function processRow(row, config) {
 
     if (needsPosting) {
       if (hasWordPressConfig()) {
-        postingResult = publishToWordPress(title, content, null, row.keyword, config);
+        postingResult = publishToWordPress(title, content, null, row.keyword, config, metaDescription);
       } else {
         postingResult = '⚠️ WordPress 설정이 없어 포스팅을 건너뜀. "설정" 시트에서 WordPress 정보를 입력해 주세요.';
       }

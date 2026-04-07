@@ -71,10 +71,12 @@ function parseGeneratedContent(text) {
   text = text.replace(/^```\s*/i, '').replace(/\s*```\s*$/, '').trim();
 
   var title = '';
+  var metaDescription = '';
   var content = '';
 
-  // Look for "제목:" line followed by "---" separator
+  // Look for "제목:" and "메타설명:" lines followed by "---" separator
   var titleMatch = text.match(/^제목:\s*(.+)/m);
+  var metaMatch = text.match(/^메타설명:\s*(.+)/m);
   var separatorIndex = text.indexOf('---');
 
   if (titleMatch && separatorIndex !== -1) {
@@ -87,8 +89,13 @@ function parseGeneratedContent(text) {
     content = lines.slice(1).join('\n').trim();
   }
 
+  if (metaMatch) {
+    metaDescription = metaMatch[1].trim();
+  }
+
   return {
     title: title,
+    metaDescription: metaDescription,
     content: content
   };
 }
