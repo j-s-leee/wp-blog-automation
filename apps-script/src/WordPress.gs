@@ -54,7 +54,7 @@ function uploadImageToWordPress(base64Data, mimeType, filename, config) {
  * @param {Object} config          - Config object with wpUrl, wpUser, wpAppPassword
  * @return {{ id: number, link: string }} Created post ID and permalink
  */
-function postToWordPress(title, content, featuredMediaId, config) {
+function postToWordPress(title, content, featuredMediaId, config, metaDescription) {
   var baseUrl = config.wpUrl.replace(/\/$/, '');
   var endpoint = baseUrl + '/wp-json/wp/v2/posts';
 
@@ -64,7 +64,8 @@ function postToWordPress(title, content, featuredMediaId, config) {
     title: title,
     content: content,
     status: 'draft',
-    featured_media: featuredMediaId || 0
+    featured_media: featuredMediaId || 0,
+    excerpt: metaDescription || ''
   };
 
   var options = {
@@ -102,7 +103,7 @@ function postToWordPress(title, content, featuredMediaId, config) {
  * @param {Object} config   - Config object with wpUrl, wpUser, wpAppPassword
  * @return {string} Result message, e.g. '포스팅 완료 (ID: 123)'
  */
-function publishToWordPress(title, content, imageSet, keyword, config) {
+function publishToWordPress(title, content, imageSet, keyword, config, metaDescription) {
   var safeKeyword = keyword.replace(/[^a-zA-Z0-9가-힣]/g, '-');
   var timestamp = Date.now();
 
@@ -151,9 +152,58 @@ function publishToWordPress(title, content, imageSet, keyword, config) {
   }
 
   // Create the draft post
-  var postResult = postToWordPress(title, finalContent, featuredMediaId, config);
+  var postResult = postToWordPress(title, finalContent, featuredMediaId, config, metaDescription);
 
   return '포스팅 완료 (ID: ' + postResult.id + ')';
+}
+
+/**
+ * Searches existing WordPress posts by keyword for internal linking.
+ *
+ * @param {string} keyword - Search keyword
+ * @param {Object} config - Config object with wpUrl, wpUser, wpAppPassword
+ * @param {number} count - Max posts to return (default 3)
+ * @return {Array<{title: string, url: string}>} Existing posts matching keyword
+ */
+function searchExistingPosts(keyword, config) {
+  var baseUrl = config.wpUrl.replace(/\/$/, '');
+  var endpoint = baseUrl + '/wp-json/wp/v2/posts?search=' + encodeURIComponent(keyword) + '&per_page=3&status=publish&_fields=id,title,link';
+
+  var authToken = Utilities.base64Encode(config.wpUser + ':' + config.wpAppPassword);
+
+  var options = {
+    method: 'get',
+    headers: {
+      'Authorization': 'Basic ' + authToken
+    },
+    muteHttpExceptions: true
+  };
+
+  var response;
+  try {
+    response = UrlFetchApp.fetch(endpoint, options);
+  } catch (e) {
+    Logger.log('기존 글 검색 오류: ' + e.message);
+    return [];
+  }
+
+  if (response.getResponseCode() !== 200) {
+    Logger.log('기존 글 검색 실패 (HTTP ' + response.getResponseCode() + ')');
+    return [];
+  }
+
+  var posts = JSON.parse(response.getContentText());
+  var results = [];
+
+  for (var i = 0; i < posts.length; i++) {
+    results.push({
+      title: posts[i].title.rendered || '',
+      url: posts[i].link || ''
+    });
+  }
+
+  Logger.log('내부 링크용 기존 글 ' + results.length + '개 검색됨');
+  return results;
 }
 
 /**
